@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>充电站选址评估平台</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+            background: #f0f2f5;
+            color: #333;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左侧面板 */
+        .side-panel {
+            width: 420px;
+            background: #fff;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            padding: 20px 24px;
+            background: linear-gradient(135deg, #1a73e8, #0d47a1);
+            color: white;
+        }
+
+        .panel-header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .panel-header p {
+            font-size: 13px;
+            opacity: 0.85;
+        }
+
+        /* 搜索区 */
+        .search-section {
+            padding: 16px 24px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 8px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: #1a73e8;
+        }
+
+        .search-box button {
+            padding: 10px 18px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .search-box button:hover { background: #1557b0; }
+
+        .radius-control {
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .radius-control label {
+            font-size: 13px;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .radius-control input[type="range"] {
+            flex: 1;
+            accent-color: #1a73e8;
+        }
+
+        .radius-control .value {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1a73e8;
+            min-width: 45px;
+        }
+
+        /* 提示区 */
+        .hint-section {
+            padding: 16px 24px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .hint-section i { font-size: 40px; margin-bottom: 12px; display: block; color: #ddd; }
+
+        /* 结果区 */
+        .result-section {
+            padding: 16px 24px;
+            flex: 1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px 0;
+            color: #999;
+        }
+
+        .loading .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid #eee;
+            border-top-color: #1a73e8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 评估结果卡片 */
+        .result-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid #e8ecf0;
+        }
+
+        .result-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .result-card h3 i { color: #1a73e8; }
+
+        /* 建议标签 */
+        .recommendation-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .rec-viable { background: #e8f5e9; color: #2e7d32; }
+        .rec-tight { background: #fff3e0; color: #e65100; }
+        .rec-saturated { background: #fce4ec; color: #c62828; }
+
+        /* 数据行 */
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .data-row:last-child { border-bottom: none; }
+
+        .data-row .label {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .data-row .value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .data-row .value.highlight {
+            color: #1a73e8;
+            font-size: 16px;
+        }
+
+        /* 分析说明 */
+        .reasoning {
+            background: #fff;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 13px;
+            line-height: 1.8;
+            color: #555;
+            white-space: pre-line;
+            border: 1px solid #eee;
+        }
+
+        /* 右侧地图 */
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 地图上的提示 */
+        .map-tip {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* 供需比仪表盘 */
+        .gauge-container {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        .gauge-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1a73e8;
+        }
+
+        .gauge-label {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .gauge-bar {
+            width: 100%;
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .gauge-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.6s ease;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .app-container { flex-direction: column; }
+            .side-panel { width: 100%; height: 50vh; }
+            .map-container { height: 50vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 左侧面板 -->
+        <div class="side-panel">
+            <div class="panel-header">
+                <h1><i class="fas fa-charging-station"></i> 充电站选址评估</h1>
+                <p>在地图上点击选点，或搜索地址，获取建站可行性分析</p>
+            </div>
+
+            <div class="search-section">
+                <div class="search-box">
+                    <input type="text" id="addressInput" placeholder="输入地址搜索，如：北京市朝阳区望京SOHO">
+                    <button onclick="searchAddress()"><i class="fas fa-search"></i> 搜索</button>
+                </div>
+                <div class="radius-control">
+                    <label>评估半径：</label>
+                    <input type="range" id="radiusSlider" min="1" max="10" step="0.5" value="3">
+                    <span class="value" id="radiusValue">3 km</span>
+                </div>
+            </div>
+
+            <div id="resultArea">
+                <div class="hint-section">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <p>点击地图选择评估位置<br>或在上方输入地址搜索</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧地图 -->
+        <div class="map-container">
+            <div class="map-tip" id="mapTip">点击地图任意位置开始评估</div>
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <!-- 高德地图JS API -->
+    <script>
+        window._AMapSecurityConfig = {
+            securityJsCode: '300a2c8f56485c89dd3651edcc71e063',
+        }
+    </script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=581fa792324d60ffc1c21d850842fab3&plugin=AMap.PlaceSearch,AMap.Geocoder,AMap.CircleEditor"></script>
+    
+    <script>
+        // ===== 配置 =====
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8000/api'
+            : 'https://backend-production-27ae.up.railway.app/api';
+        
+        // ===== 全局状态 =====
+        let map = null;
+        let marker = null;
+        let circle = null;
+        let stationMarkers = [];
+        let selectedLng = null;
+        let selectedLat = null;
+
+        // ===== 初始化地图 =====
+        function initMap() {
+            map = new AMap.Map('map', {
+                zoom: 12,
+                center: [116.397428, 39.90923], // 默认北京
+                mapStyle: 'amap://styles/light',
+            });
+
+            // 点击地图事件
+            map.on('click', function(e) {
+                const lng = e.lnglat.getLng();
+                const lat = e.lnglat.getLat();
+                setSelectedLocation(lng, lat);
+                runEvaluation(lng, lat);
+            });
+        }
+
+        // ===== 设置选中位置 =====
+        function setSelectedLocation(lng, lat) {
+            selectedLng = lng;
+            selectedLat = lat;
+
+            // 更新标记
+            if (marker) {
+                marker.setPosition([lng, lat]);
+            } else {
+                marker = new AMap.Marker({
+                    position: [lng, lat],
+                    icon: new AMap.Icon({
+                        size: new AMap.Size(30, 40),
+                        image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png',
+                        imageSize: new AMap.Size(30, 40),
+                    }),
+                    anchor: 'bottom-center',
+                });
+                marker.setMap(map);
+            }
+
+            // 更新半径圆
+            const radius = parseFloat(document.getElementById('radiusSlider').value) * 1000;
+            if (circle) {
+                circle.setCenter([lng, lat]);
+                circle.setRadius(radius);
+            } else {
+                circle = new AMap.Circle({
+                    center: [lng, lat],
+                    radius: radius,
+                    strokeColor: '#1a73e8',
+                    strokeWeight: 2,
+                    strokeOpacity: 0.6,
+                    fillColor: '#1a73e8',
+                    fillOpacity: 0.08,
+                });
+                circle.setMap(map);
+            }
+
+            // 隐藏提示
+            document.getElementById('mapTip').style.display = 'none';
+        }
+
+        // ===== 搜索地址 =====
+        function searchAddress() {
+            const address = document.getElementById('addressInput').value.trim();
+            if (!address) return;
+
+            const geocoder = new AMap.Geocoder();
+            geocoder.getLocation(address, function(status, result) {
+                if (status === 'complete' && result.geocodes.length > 0) {
+                    const location = result.geocodes[0].location;
+                    map.setCenter([location.lng, location.lat]);
+                    map.setZoom(14);
+                    setSelectedLocation(location.lng, location.lat);
+                    runEvaluation(location.lng, location.lat);
+                } else {
+                    alert('地址搜索失败，请尝试更精确的地址');
+                }
+            });
+        }
+
+        // 回车搜索
+        document.getElementById('addressInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') searchAddress();
+        });
+
+        // ===== 半径滑块 =====
+        document.getElementById('radiusSlider').addEventListener('input', function(e) {
+            const radius = e.target.value;
+            document.getElementById('radiusValue').textContent = radius + ' km';
+            if (circle) {
+                circle.setRadius(radius * 1000);
+            }
+        });
+
+        document.getElementById('radiusSlider').addEventListener('change', function(e) {
+            if (selectedLng && selectedLat) {
+                runEvaluation(selectedLng, selectedLat);
+            }
+        });
+
+        // ===== 执行评估 =====
+        async function runEvaluation(lng, lat) {
+            const radius = parseFloat(document.getElementById('radiusSlider').value);
+            
+            // 显示loading
+            document.getElementById('resultArea').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>正在分析区域供需数据...</p>
+                </div>
+            `;
+
+            try {
+                const resp = await fetch(
+                    `${API_BASE}/analysis/evaluate?lng=${lng}&lat=${lat}&radius=${radius}`
+                );
+                
+                if (!resp.ok) throw new Error('API请求失败');
+                
+                const data = await resp.json();
+                renderResult(data);
+                renderStationMarkers(data.supply.stations);
+            } catch (err) {
+                document.getElementById('resultArea').innerHTML = `
+                    <div class="hint-section">
+                        <i class="fas fa-exclamation-triangle" style="color: #e65100;"></i>
+                        <p>评估失败: ${err.message}<br>请确保后端服务已启动</p>
+                    </div>
+                `;
+            }
+        }
+
+        // ===== 渲染评估结果 =====
+        function renderResult(data) {
+            const recLabels = {
+                'viable': '有新增空间',
+                'tight': '空间有限',
+                'saturated': '趋于饱和',
+            };
+
+            // 单枪度数判定颜色
+            const avgKwh = data.supply.avg_daily_kwh_per_gun || 0;
+            const kwhColor = avgKwh >= 120 ? '#2e7d32' : avgKwh >= 80 ? '#e65100' : '#c62828';
+            const statusLabel = avgKwh >= 200 ? '严重缺供给' : avgKwh >= 120 ? '缺供给' : avgKwh >= 80 ? '相对平衡' : '饱和';
+
+            // 价格分析
+            const priceAnalysis = data.price_analysis || {};
+
+            let html = `
+                <div class="result-section">
+                    <!-- 评估结论 -->
+                    <div class="result-card">
+                        <h3><i class="fas fa-clipboard-check"></i> 评估结论</h3>
+                        <div style="text-align:center;padding:16px 0;">
+                            <div style="font-size:36px;font-weight:700;color:${kwhColor};">${avgKwh.toFixed(0)} <span style="font-size:14px;font-weight:400;">kWh/枪/日</span></div>
+                            <div style="margin-top:8px;">
+                                <span class="recommendation-badge rec-${data.recommendation}" style="font-size:14px;">相对${statusLabel}</span>
+                            </div>
+                        </div>
+                        ${data.gap_guns > 0 ? `
+                        <div class="data-row">
+                            <span class="label">可新增枪数</span>
+                            <span class="value highlight">${data.gap_guns} 枪</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">建议规模</span>
+                            <span class="value">${data.suggested_guns} 枪快充</span>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- 用户自定义模拟 -->
+                    <div class="result-card">
+                        <h3><i class="fas fa-calculator"></i> 我的建站模拟</h3>
+                        <div style="font-size:12px;color:#666;margin-bottom:10px;">输入你的车位数（枪数），预估建站后单枪日度数</div>
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+                            <input type="number" id="simGuns" placeholder="枪数" min="1" max="100" value="10" style="width:80px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+                            <span style="font-size:13px;color:#666;">枪</span>
+                            <button onclick="runSimulation()" style="padding:8px 16px;background:#1a73e8;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">模拟</button>
+                        </div>
+                        <div id="simResult"></div>
+                    </div>
+
+                    <!-- 现有供给 -->
+                    <div class="result-card">
+                        <h3><i class="fas fa-charging-station"></i> 现有供给（仅快充，排除车企站）</h3>
+                        <div class="data-row">
+                            <span class="label">充电站数</span>
+                            <span class="value">${data.supply.station_count} 座</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">快充枪(总/好枪)</span>
+                            <span class="value">${data.supply.total_guns} / <b>${data.supply.total_working_guns}</b> 枪</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">区域平均单枪日度数</span>
+                            <span class="value" style="color:${kwhColor};font-weight:600;">${avgKwh.toFixed(1)} kWh</span>
+                        </div>
+                    </div>
+
+                    <!-- 价格分析 -->
+                    ${priceAnalysis.avg_effective_price ? `
+                    <div class="result-card">
+                        <h3><i class="fas fa-tags"></i> 价格分析（活动服务费）</h3>
+                        <div class="data-row">
+                            <span class="label">区域均价</span>
+                            <span class="value">${priceAnalysis.avg_effective_price.toFixed(2)} 元/kWh</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">价格区间</span>
+                            <span class="value">${priceAnalysis.lowest_price.toFixed(2)} ~ ${priceAnalysis.highest_price.toFixed(2)} 元</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">建议定价</span>
+                            <span class="value highlight">${priceAnalysis.suggested_pricing ? priceAnalysis.suggested_pricing.toFixed(2) + ' 元/kWh' : '-'}</span>
+                        </div>
+                        <div style="margin-top:8px;padding:10px;background:#f0f7ff;border-radius:6px;font-size:12px;color:#555;line-height:1.6;">
+                            ${priceAnalysis.pricing_advice || ''}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- 需求估算 -->
+                    <div class="result-card">
+                        <h3><i class="fas fa-car"></i> 需求估算</h3>
+                        <div class="data-row">
+                            <span class="label">区域类型</span>
+                            <span class="value">${getAreaTypeLabel(data.demand.area_type)}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">估算新能源车</span>
+                            <span class="value">${formatNumber(data.demand.ev_count_estimate)} 辆</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">日充电需求</span>
+                            <span class="value">${formatNumber(Math.round(data.demand.daily_charge_demand_kwh))} kWh</span>
+                        </div>
+                    </div>
+
+                    <!-- 详细分析 -->
+                    <div class="result-card">
+                        <h3><i class="fas fa-file-alt"></i> 详细分析</h3>
+                        <div class="reasoning">${data.reasoning}</div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('resultArea').innerHTML = html;
+        }
+
+        // ===== 在地图上显示现有充电站 =====
+        function renderStationMarkers(stations) {
+            // 清除旧标记
+            stationMarkers.forEach(m => m.setMap(null));
+            stationMarkers = [];
+
+            stations.forEach(station => {
+                const m = new AMap.Marker({
+                    position: [station.location.lng, station.location.lat],
+                    icon: new AMap.Icon({
+                        size: new AMap.Size(24, 24),
+                        image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+                        imageSize: new AMap.Size(24, 30),
+                    }),
+                    anchor: 'bottom-center',
+                    title: `${station.name}\n${station.total_guns}枪 | ${station.operator}`,
+                });
+                
+                // 点击显示信息
+                m.on('click', function() {
+                    const utilPct = station.estimated_utilization ? (station.estimated_utilization * 100).toFixed(1) + '%' : '-';
+                    const dailyKwh = station.daily_kwh_per_gun ? station.daily_kwh_per_gun.toFixed(1) + ' kWh' : '-';
+                    const actPrice = station.activity_service_fee ? station.activity_service_fee.toFixed(2) + ' 元/kWh' : '-';
+                    const effPrice = station.effective_price ? station.effective_price.toFixed(2) + ' 元/kWh' : '-';
+                    const info = new AMap.InfoWindow({
+                        content: `
+                            <div style="padding:10px;min-width:240px;font-size:12px;line-height:1.8;">
+                                <b style="font-size:13px;">${station.name}</b><br>
+                                <span style="color:#666;">
+                                    运营商: ${station.operator}<br>
+                                    总枪/好枪: ${station.total_guns} / <b>${station.working_guns}</b> 枪<br>
+                                    快充${station.fast_guns} + 慢充${station.slow_guns}<br>
+                                    活动服务费: <b style="color:#1a73e8;">${actPrice}</b><br>
+                                    综合单价(电+服务): ${effPrice}<br>
+                                    单枪日度数: ${dailyKwh}<br>
+                                    利用率: ${utilPct}<br>
+                                    距离: ${Math.round(station.distance)}米
+                                </span>
+                            </div>
+                        `,
+                        offset: new AMap.Pixel(0, -30),
+                    });
+                    info.open(map, m.getPosition());
+                });
+                
+                m.setMap(map);
+                stationMarkers.push(m);
+            });
+        }
+
+        // ===== 用户模拟 =====
+        async function runSimulation() {
+            if (!selectedLng || !selectedLat) {
+                alert('请先在地图上选择位置');
+                return;
+            }
+            const guns = parseInt(document.getElementById('simGuns').value);
+            if (!guns || guns < 1) {
+                alert('请输入有效枪数');
+                return;
+            }
+            const radius = parseFloat(document.getElementById('radiusSlider').value);
+            const simResult = document.getElementById('simResult');
+            simResult.innerHTML = '<div style="text-align:center;color:#999;padding:10px;">计算中...</div>';
+            
+            try {
+                const resp = await fetch(
+                    `${API_BASE}/analysis/simulate?lng=${selectedLng}&lat=${selectedLat}&radius=${radius}&guns=${guns}`
+                );
+                if (!resp.ok) throw new Error('请求失败');
+                const data = await resp.json();
+                
+                const viableColor = data.is_viable ? '#2e7d32' : '#c62828';
+                const viableText = data.is_viable ? '达标' : '未达标';
+                
+                simResult.innerHTML = `
+                    <div class="data-row">
+                        <span class="label">预估单枪日度数</span>
+                        <span class="value" style="color:${viableColor};font-size:18px;font-weight:700;">${data.predicted_daily_kwh_per_gun} kWh</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">120度盈利线</span>
+                        <span class="value" style="color:${viableColor}">${viableText}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">参考定价(活动服务费)</span>
+                        <span class="value">${data.user_service_fee.toFixed(2)} 元/kWh</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">预估日收入</span>
+                        <span class="value">¥${data.predicted_daily_revenue}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">预估月收入(扣运营)</span>
+                        <span class="value">¥${data.predicted_monthly_revenue}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">总投资</span>
+                        <span class="value">¥${(data.total_investment/10000).toFixed(1)}万</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">回本周期</span>
+                        <span class="value">${data.payback_months} 个月</span>
+                    </div>
+                    <div style="margin-top:8px;padding:10px;background:${data.is_viable ? '#e8f5e9' : '#fce4ec'};border-radius:6px;font-size:12px;line-height:1.6;">
+                        ${data.explanation}
+                    </div>
+                `;
+            } catch(err) {
+                simResult.innerHTML = `<div style="color:red;font-size:12px;">模拟失败: ${err.message}</div>`;
+            }
+        }
+
+        // ===== 工具函数 =====
+        function getAreaTypeLabel(type) {
+            const labels = {
+                'residential': '居民区',
+                'commercial': '商业/办公区',
+                'industrial': '工业/物流区',
+                'mixed': '混合区域',
+            };
+            return labels[type] || type;
+        }
+
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        // ===== 启动 =====
+        initMap();
+    </script>
+</body>
+</html>
