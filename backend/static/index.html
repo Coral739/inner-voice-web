@@ -453,23 +453,29 @@
             document.getElementById('mapTip').style.display = 'none';
         }
 
-        // ===== 搜索地址 =====
-        function searchAddress() {
+        // ===== 搜索地址（调用后端API，避免前端受高德安全域名限制） =====
+        async function searchAddress() {
             const address = document.getElementById('addressInput').value.trim();
             if (!address) return;
 
-            const geocoder = new AMap.Geocoder();
-            geocoder.getLocation(address, function(status, result) {
-                if (status === 'complete' && result.geocodes.length > 0) {
-                    const location = result.geocodes[0].location;
-                    map.setCenter([location.lng, location.lat]);
+            try {
+                const resp = await fetch(`${API_BASE}/analysis/geocode?address=${encodeURIComponent(address)}`);
+                if (!resp.ok) throw new Error('请求失败');
+                const data = await resp.json();
+
+                if (data.status === '1' && data.geocodes && data.geocodes.length > 0) {
+                    const locationStr = data.geocodes[0].location;
+                    const [lng, lat] = locationStr.split(',').map(Number);
+                    map.setCenter([lng, lat]);
                     map.setZoom(14);
-                    setSelectedLocation(location.lng, location.lat);
-                    runEvaluation(location.lng, location.lat);
+                    setSelectedLocation(lng, lat);
+                    runEvaluation(lng, lat);
                 } else {
-                    alert('地址搜索失败，请尝试更精确的地址');
+                    alert('未找到相关地点，请尝试更精确的地址');
                 }
-            });
+            } catch(err) {
+                alert('地址搜索失败: ' + err.message);
+            }
         }
 
         // 回车搜索

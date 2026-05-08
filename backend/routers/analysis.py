@@ -6,6 +6,7 @@ from typing import Optional
 from services.analysis_service import run_full_evaluation, simulate_user_station
 from services.supply_service import get_supply_info
 from services.demand_service import estimate_demand
+from services.amap_service import geocode_address
 
 router = APIRouter()
 
@@ -45,4 +46,17 @@ async def simulate_station(
     
     # 模拟
     result = simulate_user_station(supply, demand, guns, price)
+    return result
+
+
+@router.get("/geocode")
+async def geocode(
+    address: str = Query(..., description="搜索地址"),
+    city: Optional[str] = Query(None, description="城市（可选，提高精度）"),
+):
+    """
+    地址转坐标，前端调用后端高德API进行地理编码
+    避免前端直接调用高德JS API受安全域名限制
+    """
+    result = await geocode_address(address, city)
     return result
