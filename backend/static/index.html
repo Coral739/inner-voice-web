@@ -278,6 +278,37 @@
             transition: width 0.6s ease;
         }
 
+        /* 充电站发光点 */
+        .station-glow {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 6px currentColor;
+        }
+        .station-glow::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            margin: -6px 0 0 -6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: glow-pulse 2s infinite;
+            opacity: 0.5;
+        }
+        @keyframes glow-pulse {
+            0% { transform: scale(1); opacity: 0.5; }
+            70% { transform: scale(2.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+        .glow-idle { color: #4caf50; background: #4caf50; }
+        .glow-busy { color: #ff5722; background: #ff5722; }
+        .glow-normal { color: #2196f3; background: #2196f3; }
+        .glow-maint { color: #9e9e9e; background: #9e9e9e; }
+
         /* 响应式 */
         @media (max-width: 768px) {
             .app-container { flex-direction: column; }
@@ -332,7 +363,9 @@
     
     <script>
         // ===== 配置 =====
-        const API_BASE = '/api';
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8000/api'
+            : 'https://backend-production-0082d.up.railway.app/api';
         
         // ===== 全局状态 =====
         let map = null;
@@ -341,6 +374,24 @@
         let stationMarkers = [];
         let selectedLng = null;
         let selectedLat = null;
+
+        // 区域类型颜色（评估圆按区域类型着色）
+        const AREA_TYPE_COLORS = {
+            'residential': { fillColor: '#607d8b', fillOpacity: 0.12, strokeColor: '#607d8b' },
+            'commercial': { fillColor: '#8d6e63', fillOpacity: 0.12, strokeColor: '#8d6e63' },
+            'industrial': { fillColor: '#bcaaa4', fillOpacity: 0.12, strokeColor: '#795548' },
+            'mixed': { fillColor: '#90a4ae', fillOpacity: 0.12, strokeColor: '#607d8b' },
+        };
+
+        // 根据利用率/完好率判断站点状态
+        function getStationStatus(station) {
+            const health = station.gun_health_rate || 1.0;
+            if (health < 0.5) return 'maint';
+            const u = station.estimated_utilization || 0;
+            if (u >= 0.35) return 'busy';
+            if (u >= 0.15) return 'normal';
+            return 'idle';
+        }
 
         // ===== 初始化地图 =====
         function initMap() {
@@ -461,6 +512,17 @@
                 if (!resp.ok) throw new Error('API请求失败');
                 
                 const data = await resp.json();
+
+                // 按区域类型更新评估圆颜色
+                const areaStyle = AREA_TYPE_COLORS[data.demand.area_type] || AREA_TYPE_COLORS['mixed'];
+                if (circle) {
+                    circle.setOptions({
+                        fillColor: areaStyle.fillColor,
+                        fillOpacity: areaStyle.fillOpacity,
+                        strokeColor: areaStyle.strokeColor,
+                    });
+                }
+
                 renderResult(data);
                 renderStationMarkers(data.supply.stations);
             } catch (err) {
@@ -591,34 +653,49 @@
             document.getElementById('resultArea').innerHTML = html;
         }
 
-        // ===== 在地图上显示现有充电站 =====
+        // ===== 在地图上显示现有充电站（发光点） =====
         function renderStationMarkers(stations) {
             // 清除旧标记
             stationMarkers.forEach(m => m.setMap(null));
             stationMarkers = [];
 
+            const statusLabels = {
+                'idle': '空闲',
+                'normal': '正常',
+                'busy': '繁忙',
+                'maint': '维护',
+            };
+            const statusColors = {
+                'idle': '#4caf50',
+                'normal': '#2196f3',
+                'busy': '#ff5722',
+                'maint': '#9e9e9e',
+            };
+
             stations.forEach(station => {
+                const status = getStationStatus(station);
+                const statusClass = 'glow-' + status;
+
                 const m = new AMap.Marker({
                     position: [station.location.lng, station.location.lat],
-                    icon: new AMap.Icon({
-                        size: new AMap.Size(24, 24),
-                        image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
-                        imageSize: new AMap.Size(24, 30),
-                    }),
-                    anchor: 'bottom-center',
-                    title: `${station.name}\n${station.total_guns}枪 | ${station.operator}`,
+                    content: `<div class="station-glow ${statusClass}"></div>`,
+                    offset: new AMap.Pixel(-6, -6),
+                    title: `${station.name} [${statusLabels[status]}]\n${station.total_guns}枪 | ${station.operator}`,
                 });
-                
+
                 // 点击显示信息
                 m.on('click', function() {
                     const utilPct = station.estimated_utilization ? (station.estimated_utilization * 100).toFixed(1) + '%' : '-';
                     const dailyKwh = station.daily_kwh_per_gun ? station.daily_kwh_per_gun.toFixed(1) + ' kWh' : '-';
                     const actPrice = station.activity_service_fee ? station.activity_service_fee.toFixed(2) + ' 元/kWh' : '-';
                     const effPrice = station.effective_price ? station.effective_price.toFixed(2) + ' 元/kWh' : '-';
+                    const statusText = statusLabels[status];
+                    const sColor = statusColors[status];
                     const info = new AMap.InfoWindow({
                         content: `
                             <div style="padding:10px;min-width:240px;font-size:12px;line-height:1.8;">
-                                <b style="font-size:13px;">${station.name}</b><br>
+                                <b style="font-size:13px;">${station.name}</b>
+                                <span style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:10px;font-size:11px;color:#fff;background:${sColor};">${statusText}</span><br>
                                 <span style="color:#666;">
                                     运营商: ${station.operator}<br>
                                     总枪/好枪: ${station.total_guns} / <b>${station.working_guns}</b> 枪<br>
@@ -631,11 +708,11 @@
                                 </span>
                             </div>
                         `,
-                        offset: new AMap.Pixel(0, -30),
+                        offset: new AMap.Pixel(0, -10),
                     });
                     info.open(map, m.getPosition());
                 });
-                
+
                 m.setMap(map);
                 stationMarkers.push(m);
             });
